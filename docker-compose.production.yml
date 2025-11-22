@@ -371,21 +371,28 @@ services:
       - caddy=supabase.yourdomain.com
       - caddy.reverse_proxy={{upstreams 8000}}
     environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
-      KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
-      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
-      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
-      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
-      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+      # match Coolify template
+      - SERVICE_URL_SUPABASEKONG_8000     # Coolify will inject this
+      - KONG_PORT_MAPS=443:8000
+      - JWT_SECRET=${SERVICE_PASSWORD_JWT}
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/home/kong/kong.yml
+      - KONG_DNS_ORDER=LAST,A,CNAME
+      - KONG_PLUGINS=request-transformer,cors,key-auth,acl,basic-auth
+      - KONG_NGINX_PROXY_PROXY_BUFFER_SIZE=160k
+      - KONG_NGINX_PROXY_PROXY_BUFFERS=64 160k
+
+      # keys from Coolify-style vars
+      - SUPABASE_ANON_KEY=${SERVICE_SUPABASEANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SERVICE_SUPABASESERVICE_KEY}
+      - DASHBOARD_USERNAME=${SERVICE_USER_ADMIN}
+      - DASHBOARD_PASSWORD=${SERVICE_PASSWORD_ADMIN}
     depends_on:
       db_prod:
         condition: service_healthy
       # analytics_prod:
       #   condition: service_healthy
+      
 
   # Studio (Admin Interface)
   studio_prod:
@@ -395,16 +402,31 @@ services:
     networks:
       - coolify
     environment:
-      STUDIO_PG_META_URL: http://meta_prod:8080
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DEFAULT_ORGANIZATION_NAME: "Agent Platform"
-      DEFAULT_PROJECT_NAME: "Production"
-      SUPABASE_URL: http://kong_prod:8000
-      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
-      HOSTNAME: 0.0.0.0
-      PORT: 3000
+      - HOSTNAME=0.0.0.0
+      - STUDIO_PG_META_URL=http://meta_prod:8080
+
+      # use Coolify-style password var
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+
+      - DEFAULT_ORGANIZATION_NAME=${STUDIO_DEFAULT_ORGANIZATION:-Agent Platform}
+      - DEFAULT_PROJECT_NAME=${STUDIO_DEFAULT_PROJECT:-Production}
+
+      # internal URL for Studio → Kong (service name is kong_prod)
+      - 'SUPABASE_URL=http://kong_prod:8000'
+
+      # public URL + keys from Coolify-style vars
+      - SUPABASE_PUBLIC_URL=${SERVICE_URL_SUPABASEKONG}
+      - SUPABASE_ANON_KEY=${SERVICE_SUPABASEANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SERVICE_SUPABASESERVICE_KEY}
+      - AUTH_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+
+      # optional but matches template
+      - LOGFLARE_API_KEY=${SERVICE_PASSWORD_LOGFLARE}
+      - LOGFLARE_URL=http://supabase-analytics:4000
+      - 'SUPABASE_PUBLIC_API=${SERVICE_URL_SUPABASEKONG}'
+      - NEXT_PUBLIC_ENABLE_LOGS=true
+      - NEXT_ANALYTICS_BACKEND_PROVIDER=postgres
+      - 'OPENAI_API_KEY=${OPENAI_API_KEY}'
     depends_on:
       kong_prod:
         condition: service_started
