@@ -165,19 +165,20 @@ services:
     networks:
       - coolify
     environment:
-      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db_prod:5432/postgres
-      PGRST_DB_SCHEMAS: public,storage,graphql_public
-      PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: ${JWT_SECRET}
-      PGRST_DB_USE_LEGACY_GUCS: "false"
-      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
-      PGRST_APP_SETTINGS_JWT_EXP: 3600
+      - PGRST_DB_URI=postgres://authenticator:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME:-db_prod}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}
+      - 'PGRST_DB_SCHEMAS=${PGRST_DB_SCHEMAS:-public,storage,graphql_public}'
+      - PGRST_DB_ANON_ROLE=anon
+      - PGRST_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+      - PGRST_DB_USE_LEGACY_GUCS=false
+      - PGRST_APP_SETTINGS_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+      - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-3600}
     depends_on:
       db_prod:
         condition: service_healthy
       # analytics_prod:
       #   condition: service_healthy
-  
+
+      
   # Supabase Realtime
   realtime_prod:
     container_name: supabase-realtime-prod
@@ -186,23 +187,27 @@ services:
     networks:
       - coolify
     environment:
-      PORT: 4000
-      DB_HOST: db_prod
-      DB_PORT: 5432
-      DB_USER: supabase_admin
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_NAME: postgres
-      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
-      DB_ENC_KEY: supabaserealtime
-      API_JWT_SECRET: ${JWT_SECRET}
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      ERL_AFLAGS: -proto_dist inet_tcp
-      DNS_NODES: "''"
-      RLIMIT_NOFILE: "10000"
-      APP_NAME: realtime
-      SEED_SELF_HOST: true
-      RUN_JANITOR: true
-      LOG_LEVEL: info
+      - PORT=4000
+      - DB_HOST=${POSTGRES_HOSTNAME:-db_prod}
+      - DB_PORT=${POSTGRES_PORT:-5432}
+      - DB_USER=supabase_admin
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DB_NAME=${POSTGRES_DB:-postgres}
+      - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
+      - DB_ENC_KEY=supabaserealtime
+      - API_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+      - FLY_ALLOC_ID=fly123
+      - FLY_APP_NAME=realtime
+      - SECRET_KEY_BASE=${SECRET_PASSWORD_REALTIME}
+      - ERL_AFLAGS=-proto_dist inet_tcp
+      - ENABLE_TAILSCALE=false
+      - DNS_NODES=''
+      - RLIMIT_NOFILE=10000
+      - APP_NAME=realtime
+      - SEED_SELF_HOST=true
+      - RUN_JANITOR=true
+      - JANITOR_INTERVAL=60000
+      - LOG_LEVEL=info
     healthcheck:
       test:
         [
@@ -213,8 +218,8 @@ services:
           "-o",
           "/dev/null",
           "-H",
-          "Authorization: Bearer ${SUPABASE_ANON_KEY}",
-          "http://localhost:4000/api/tenants/realtime-dev/health"
+          "Authorization: Bearer ${SERVICE_SUPABASEANON_KEY}",
+          "http://127.0.0.1:4000/api/tenants/realtime-dev/health",
         ]
       timeout: 5s
       interval: 5s
@@ -224,6 +229,7 @@ services:
         condition: service_healthy
       # analytics_prod:
       #   condition: service_healthy
+      
   
   # Supabase Storage
   storage_prod:
@@ -233,17 +239,23 @@ services:
     networks:
       - coolify
     environment:
-      ANON_KEY: ${SUPABASE_ANON_KEY}
-      SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      # keys from Coolify Supabase template
+      ANON_KEY: ${SERVICE_SUPABASEANON_KEY}
+      SERVICE_KEY: ${SERVICE_SUPABASESERVICE_KEY}
+      # internal PostgREST URL
       POSTGREST_URL: http://rest_prod:3000
-      PGRST_JWT_SECRET: ${JWT_SECRET}
-      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db_prod:5432/postgres
+      # must use the same JWT secret Supabase uses
+      PGRST_JWT_SECRET: ${SERVICE_PASSWORD_JWT}
+      # same Postgres password that Studio / auth / rest use
+      DATABASE_URL: postgres://supabase_storage_admin:${SERVICE_PASSWORD_POSTGRES}@db_prod:5432/postgres
+
       FILE_SIZE_LIMIT: 52428800
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: stub
       REGION: stub
       GLOBAL_S3_BUCKET: stub
+
       ENABLE_IMAGE_TRANSFORMATION: "true"
       IMGPROXY_URL: http://imgproxy_prod:5001
     volumes:
@@ -268,7 +280,7 @@ services:
         condition: service_started
       imgproxy_prod:
         condition: service_started
-  
+
   # Image Proxy for Storage
   imgproxy_prod:
     container_name: supabase-imgproxy-prod
@@ -339,12 +351,13 @@ services:
     networks:
       - coolify
     environment:
-      PG_META_PORT: 8080
-      PG_META_DB_HOST: db_prod
-      PG_META_DB_PORT: 5432
-      PG_META_DB_NAME: postgres
-      PG_META_DB_USER: supabase_admin
-      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      - PG_META_PORT=8080
+      # Match Coolify’s variable naming / defaults
+      - PG_META_DB_HOST=${POSTGRES_HOSTNAME:-supabase-db}
+      - PG_META_DB_PORT=${POSTGRES_PORT:-5432}
+      - PG_META_DB_NAME=${POSTGRES_DB:-postgres}
+      - PG_META_DB_USER=supabase_admin
+      - PG_META_DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
     depends_on:
       db_prod:
         condition: service_healthy
