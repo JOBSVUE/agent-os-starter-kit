@@ -694,7 +694,7 @@ services:
         condition: service_completed_successfully
 
   # Web Frontend: Next.js application in production mode
-    web-frontend:
+  web-frontend:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
